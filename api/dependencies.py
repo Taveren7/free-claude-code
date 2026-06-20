@@ -97,15 +97,24 @@ def require_api_key(
     `Settings.anthropic_auth_token`. If `ANTHROPIC_AUTH_TOKEN` is empty, this is a no-op.
     """
     anthropic_auth_token = settings.anthropic_auth_token.strip()
-    if not anthropic_auth_token:
-        # No API key configured -> allow
-        return
+    request.state.custom_model = None
 
     header = (
         request.headers.get("x-api-key")
         or request.headers.get("authorization")
         or request.headers.get("anthropic-auth-token")
     )
+
+    if not anthropic_auth_token:
+        # No API key configured -> allow, but still check if they passed a custom model
+        if header:
+            token = header.strip()
+            if header.lower().startswith("bearer "):
+                token = header.split(" ", 1)[1].strip()
+            if token and ":" in token:
+                request.state.custom_model = token.split(":", 1)[1].strip()
+        return
+
     if not header:
         raise HTTPException(status_code=401, detail="Missing API key")
 
@@ -116,7 +125,9 @@ def require_api_key(
 
     # Strip anything after the first colon to handle tokens with appended model names
     if token and ":" in token:
-        token = token.split(":", 1)[0].strip()
+        parts = token.split(":", 1)
+        token = parts[0].strip()
+        request.state.custom_model = parts[1].strip()
 
     # Constant-time comparison to avoid leaking the configured token via
     # response-time differences on a per-byte mismatch (CWE-208).

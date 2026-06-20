@@ -112,12 +112,14 @@ class ApiRequestPipeline:
         model_router: ModelRouter | None = None,
         token_counter: TokenCounter = get_token_count,
         responses_adapter: OpenAIResponsesAdapter | None = None,
+        custom_model_override: str | None = None,
     ) -> None:
         self._settings = settings
         self._provider_getter = provider_getter
         self._model_router = model_router or ModelRouter(settings)
         self._token_counter = token_counter
         self._responses_adapter = responses_adapter or OpenAIResponsesAdapter()
+        self._custom_model_override = custom_model_override
         self._message_intercepts: tuple[MessageIntercept, ...] = (
             self._intercept_web_server_tool,
             self._intercept_local_optimization,
@@ -127,7 +129,9 @@ class ApiRequestPipeline:
         """Create an Anthropic-compatible message response."""
         try:
             _require_non_empty_messages(request_data.messages)
-            routed = self._model_router.resolve_messages_request(request_data)
+            routed = self._model_router.resolve_messages_request(
+                request_data, self._custom_model_override
+            )
             routed = self._apply_message_routing_policies(routed)
             self._reject_unsupported_server_tools(routed)
 
@@ -176,7 +180,9 @@ class ApiRequestPipeline:
             )
             response_request = MessagesRequest(**anthropic_payload)
             _require_non_empty_messages(response_request.messages)
-            routed = self._model_router.resolve_messages_request(response_request)
+            routed = self._model_router.resolve_messages_request(
+                response_request, self._custom_model_override
+            )
             self._reject_unsupported_server_tools(routed)
 
             streamed = self._provider_stream(
@@ -228,7 +234,9 @@ class ApiRequestPipeline:
         with logger.contextualize(request_id=request_id):
             try:
                 _require_non_empty_messages(request_data.messages)
-                routed = self._model_router.resolve_token_count_request(request_data)
+                routed = self._model_router.resolve_token_count_request(
+                    request_data, self._custom_model_override
+                )
                 tokens = self._token_counter(
                     routed.request.messages, routed.request.system, routed.request.tools
                 )

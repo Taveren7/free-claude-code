@@ -22,14 +22,17 @@ router = APIRouter()
 def get_request_pipeline(
     request: Request,
     settings: Settings = Depends(get_settings),
+    _auth=Depends(require_api_key),
 ) -> ApiRequestPipeline:
     """Build the API request pipeline for route handlers."""
+    custom_model = getattr(request.state, "custom_model", None)
     return ApiRequestPipeline(
         settings,
         provider_getter=lambda provider_type: dependencies.resolve_provider(
             provider_type, app=request.app, settings=settings
         ),
         token_counter=get_token_count,
+        custom_model_override=custom_model,
     )
 
 

@@ -40,12 +40,15 @@ class ModelRouter:
     def __init__(self, settings: Settings):
         self._settings = settings
 
-    def resolve(self, claude_model_name: str) -> ResolvedModel:
+    def resolve(
+        self, claude_model_name: str, custom_model_override: str | None = None
+    ) -> ResolvedModel:
+        model_ref = custom_model_override or claude_model_name
         (
             direct_provider_id,
             direct_provider_model,
             force_thinking_enabled,
-        ) = self._direct_provider_model(claude_model_name)
+        ) = self._direct_provider_model(model_ref)
         if direct_provider_id is not None and direct_provider_model is not None:
             thinking_enabled = (
                 force_thinking_enabled
@@ -63,17 +66,20 @@ class ModelRouter:
                 original_model=claude_model_name,
                 provider_id=direct_provider_id,
                 provider_model=direct_provider_model,
-                provider_model_ref=claude_model_name,
+                provider_model_ref=model_ref,
                 thinking_enabled=thinking_enabled,
             )
 
-        provider_model_ref = self._settings.resolve_model(claude_model_name)
-        thinking_enabled = self._settings.resolve_thinking(claude_model_name)
+        provider_model_ref = self._settings.resolve_model(model_ref)
+        thinking_enabled = self._settings.resolve_thinking(model_ref)
         provider_id = Settings.parse_provider_type(provider_model_ref)
         provider_model = Settings.parse_model_name(provider_model_ref)
         if provider_model != claude_model_name:
             logger.debug(
-                "MODEL MAPPING: '{}' -> '{}'", claude_model_name, provider_model
+                "MODEL MAPPING: '{}' -> '{}' (provider: {})",
+                claude_model_name,
+                provider_model,
+                provider_id,
             )
         return ResolvedModel(
             original_model=claude_model_name,
@@ -106,19 +112,19 @@ class ModelRouter:
         return provider_id, provider_model, None
 
     def resolve_messages_request(
-        self, request: MessagesRequest
+        self, request: MessagesRequest, custom_model_override: str | None = None
     ) -> RoutedMessagesRequest:
         """Return an internal routed request context."""
-        resolved = self.resolve(request.model)
+        resolved = self.resolve(request.model, custom_model_override)
         routed = request.model_copy(deep=True)
         routed.model = resolved.provider_model
         return RoutedMessagesRequest(request=routed, resolved=resolved)
 
     def resolve_token_count_request(
-        self, request: TokenCountRequest
+        self, request: TokenCountRequest, custom_model_override: str | None = None
     ) -> RoutedTokenCountRequest:
         """Return an internal token-count request context."""
-        resolved = self.resolve(request.model)
+        resolved = self.resolve(request.model, custom_model_override)
         routed = request.model_copy(
             update={"model": resolved.provider_model}, deep=True
         )

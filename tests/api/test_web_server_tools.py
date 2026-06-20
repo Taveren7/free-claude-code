@@ -55,14 +55,16 @@ class FixedProviderModelRouter(ModelRouter):
         self._fixed_provider_id = provider_id
 
     def resolve_messages_request(
-        self, request: MessagesRequest
+        self, request: MessagesRequest, custom_model_override: str | None = None
     ) -> RoutedMessagesRequest:
+        resolved = self.resolve(request.model, custom_model_override)
+        # Use fixed provider_id from test double setup
         resolved = ResolvedModel(
-            original_model=request.model,
+            original_model=resolved.original_model,
             provider_id=self._fixed_provider_id,
-            provider_model=request.model,
-            provider_model_ref=f"{self._fixed_provider_id}/{request.model}",
-            thinking_enabled=False,
+            provider_model=resolved.provider_model,
+            provider_model_ref=f"{self._fixed_provider_id}/{resolved.provider_model}",
+            thinking_enabled=resolved.thinking_enabled,
         )
         routed = request.model_copy(deep=True)
         routed.model = resolved.provider_model

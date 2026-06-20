@@ -200,3 +200,36 @@ def test_model_router_logs_mapping(settings):
     assert "MODEL MAPPING" in args[0]
     assert args[1] == "claude-2.1"
     assert args[2] == "fallback-model"
+
+
+def test_model_router_resolves_fully_qualified_model_directly(settings):
+    router = ModelRouter(settings)
+
+    # Valid provider prefix -> resolved directly
+    resolved = router.resolve("open_router/z-ai/glm-5.2")
+    assert resolved.provider_id == "open_router"
+    assert resolved.provider_model == "z-ai/glm-5.2"
+    assert resolved.provider_model_ref == "open_router/z-ai/glm-5.2"
+
+    # Invalid provider prefix -> falls back to default settings model
+    resolved = router.resolve("unknown_provider/some-model")
+    assert resolved.provider_id == "nvidia_nim"
+    assert resolved.provider_model == "fallback-model"
+    assert resolved.provider_model_ref == "nvidia_nim/fallback-model"
+
+
+def test_model_router_applies_custom_model_override(settings):
+    router = ModelRouter(settings)
+
+    # Custom override applied directly (standard Claude request model is overridden)
+    resolved = router.resolve("claude-3-opus", custom_model_override="open_router/z-ai/glm-5.2")
+    assert resolved.provider_id == "open_router"
+    assert resolved.provider_model == "z-ai/glm-5.2"
+    assert resolved.provider_model_ref == "open_router/z-ai/glm-5.2"
+
+    # Custom override applied using a simple model name without provider -> resolved through settings
+    settings.model_haiku = "lmstudio/qwen2.5-7b"
+    resolved = router.resolve("claude-3-opus", custom_model_override="claude-3-haiku-20240307")
+    assert resolved.provider_id == "lmstudio"
+    assert resolved.provider_model == "qwen2.5-7b"
+    assert resolved.provider_model_ref == "lmstudio/qwen2.5-7b"
